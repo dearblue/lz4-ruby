@@ -51,6 +51,14 @@ class LZ4
     LZ4Internal.raw_uncompress(*args)
   end
 
+  def self.raw_stream_encode(*args)
+    LZ4Internal::RawStreamEncoder.new(*args)
+  end
+
+  def self.raw_stream_decode(*args)
+    LZ4Internal::RawStreamDecoder.new(*args)
+  end
+
   def self.encode_varbyte(val)
     varbytes = []
 
