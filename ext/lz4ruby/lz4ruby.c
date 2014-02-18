@@ -277,7 +277,7 @@ struct lz4internal_rse_t {
   char *intail; /* tail of input buffer */
   size_t blocksize;
   VALUE buffer; /* entity of input buffer */
-  VALUE predict; /* preset-dictionary / TODO: IMPLEMENT ME! */
+  VALUE predict; /* preset-dictionary */
   VALUE ishc; /* zero => not hc / non zero => hc */
 };
 
@@ -359,14 +359,13 @@ static void lz4internal_rse_init_scanargs(int argc, VALUE argv[], size_t *blocks
     rb_bug("not reachable here - %s:%d", __FILE__, __LINE__);
     break;
   }
-
-  if (*blocksize > LZ4_MAX_INPUT_SIZE) {
-    rb_raise(rb_eArgError, "blocksize is too big");
-  }
   if (*blocksize < 1) {
     rb_raise(rb_eArgError, "blocksize is too small");
   }
   *blocksize += LZ4RUBY_RAWSTREAM_PREFIX_SIZE;
+  if (*blocksize > LZ4_MAX_INPUT_SIZE) {
+    rb_raise(rb_eArgError, "blocksize is too big");
+  }
   if (*blocksize < LZ4RUBY_RAWSTREAM_BUFFER_MINSIZE) {
     *blocksize = LZ4RUBY_RAWSTREAM_BUFFER_MINSIZE;
   }
@@ -432,8 +431,8 @@ static VALUE lz4internal_rse_init(int argc, VALUE argv[], VALUE lz4) {
  * call-seq:
  *    update(src) -> compress_data
  *    update(src, maxsize) -> compress_data
- *    update(src, dest) -> dest_with_compress_data
- *    update(src, dest, maxsize) -> dest_with_compress_data
+ *    update(src, dest) -> dest_with_compressed_data
+ *    update(src, dest, maxsize) -> dest_with_compressed_data
  */
 static VALUE lz4internal_rse_update(int argc, VALUE argv[], VALUE lz4) {
   VALUE src, dest;
@@ -478,7 +477,7 @@ static void lz4internal_rse_reset_state(struct lz4internal_rse_t *lz4p) {
  *    reset -> self
  *    reset(blocksize) -> self
  *    reset(blocksize, is_high_compress) -> self
- *    reset(blocksize, is_high_compress, presetdictionary) -> self
+ *    reset(blocksize, is_high_compress, preset_dictionary) -> self
  *
  * Reset raw stream encoder.
  */
@@ -628,7 +627,7 @@ static VALUE lz4internal_rsd_update(int argc, VALUE argv[], VALUE lz4) {
 /*
  * call-seq:
  *    reset -> self
- *    reset(predict) -> self
+ *    reset(preset_dictionary) -> self
  */
 static VALUE lz4internal_rsd_reset(int argc, VALUE argv[], VALUE lz4) {
   VALUE newpredict;
@@ -663,6 +662,8 @@ void Init_lz4ruby(void) {
   rb_define_method(lz4_rse, "update", RUBY_METHOD_FUNC(lz4internal_rse_update), -1);
   rb_define_method(lz4_rse, "reset", RUBY_METHOD_FUNC(lz4internal_rse_reset), -1);
 
+#define RDOC_FAKE(exp)
+  RDOC_FAKE(lz4_rsd = rb_define_class_under(lz4internal, "RawStreamDecoder", rb_cObject));
   lz4_rsd = rb_struct_define_without_accessor(NULL, rb_cObject, lz4internal_rsd_alloc, "prefix", NULL);
   rb_const_set(lz4internal, rb_intern("RawStreamDecoder"), lz4_rsd);
   rb_define_method(lz4_rsd, "initialize", RUBY_METHOD_FUNC(lz4internal_rsd_init), -1);
