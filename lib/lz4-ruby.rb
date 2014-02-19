@@ -52,14 +52,15 @@ class LZ4
   end
 
   #
-  # @overload raw_stream_encode(blocksize)
-  # @overload raw_stream_encode(blocksize, is_high_compress)
-  # @overload raw_stream_encode(blocksize, is_high_compress, preset_dictionary)
+  # call-seq:
+  #   raw_stream_encode(blocksize) -> raw_stream_encoder
+  #   raw_stream_encode(blocksize, is_high_compress) -> raw_stream_encoder
+  #   raw_stream_encode(blocksize, is_high_compress, preset_dictionary) -> raw_stream_encoder
   #
-  # @example
+  # === example
   #
   #   lz4enc = raw_stream_encode(256 * 1024, true)
-  #   encoded_blocks = [] # not string!
+  #   encoded_blocks = [] # Not string! LZ4 raw data do not know the end of its own.
   #   until srcio.eof?
   #     encoded_blocks << lz4enc.update(srcio.read(256 * 1024))
   #   end
@@ -74,10 +75,13 @@ class LZ4
   end
 
   #
-  # @overload raw_stream_decode
-  # @overload raw_stream_decode(preset_dictionary)
+  # call-seq:
+  #   raw_stream_decode -> raw_stream_decoder
+  #   raw_stream_decode(preset_dictionary) -> raw_stream_decoder
   #
-  # @example @see raw_stream_encode
+  # === example
+  #
+  # See raw_stream_encode.
   #
   def self.raw_stream_decode(*args)
     LZ4Internal::RawStreamDecoder.new(*args)
