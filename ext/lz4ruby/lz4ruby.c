@@ -359,7 +359,7 @@ static void lz4internal_rse_init_scanargs(int argc, VALUE argv[], size_t *blocks
     rb_bug("not reachable here - %s:%d", __FILE__, __LINE__);
     break;
   }
-  if (*blocksize < 1) {
+  if ((ssize_t)*blocksize < 1) {
     rb_raise(rb_eArgError, "blocksize is too small");
   }
   *blocksize += LZ4RUBY_RAWSTREAM_PREFIX_SIZE;
@@ -377,15 +377,14 @@ static void lz4internal_rse_set_predict(struct lz4internal_rse_t *lz4p, VALUE pr
   VALUE temp = rb_str_buf_new(maxsize);
   char *predictp = RSTRING_PTR(predict);
   if (srcsize < LZ4RUBY_RAWSTREAM_PREFIX_SIZE) {
-    size_t left = LZ4RUBY_RAWSTREAM_PREFIX_SIZE - srcsize;
-    memset(lz4p->inoff, 0, left);
-    memcpy(lz4p->inoff + left, predictp, srcsize);
+    memcpy(lz4p->inoff, predictp, srcsize);
   } else {
-    size_t left = srcsize - LZ4RUBY_RAWSTREAM_PREFIX_SIZE;
-    memcpy(lz4p->inoff, predictp + left, LZ4RUBY_RAWSTREAM_PREFIX_SIZE);
+    memcpy(lz4p->inoff, predictp + srcsize - LZ4RUBY_RAWSTREAM_PREFIX_SIZE, LZ4RUBY_RAWSTREAM_PREFIX_SIZE);
+    srcsize = LZ4RUBY_RAWSTREAM_PREFIX_SIZE;
   }
-  int size = lz4p->traits->update(lz4p->lz4, lz4p->inoff, RSTRING_PTR(temp), LZ4RUBY_RAWSTREAM_PREFIX_SIZE, maxsize);
-  if (size <= 0) { rb_raise(lz4_error, "failed LZ4_compress_limitedOutput_continue"); }
+  int size = lz4p->traits->update(lz4p->lz4, lz4p->inoff, RSTRING_PTR(temp), srcsize, maxsize);
+  if (size <= 0) { rb_raise(lz4_error, "failed set preset dictionary"); }
+  lz4p->inoff += srcsize;
 }
 
 static void lz4internal_rse_create_encoder(struct lz4internal_rse_t *lz4p, VALUE buf, VALUE predict) {
@@ -463,13 +462,16 @@ static VALUE lz4internal_rse_update(int argc, VALUE argv[], VALUE lz4) {
   return dest;
 }
 
-static void lz4internal_rse_reset_state(struct lz4internal_rse_t *lz4p) {
+static void lz4internal_rse_reset_state(struct lz4internal_rse_t *lz4p, VALUE predict) {
   lz4p->inoff = RSTRING_PTR(lz4p->buffer);
   lz4p->intail = lz4p->inoff + rb_str_capacity(lz4p->buffer);
   lz4p->blocksize = rb_str_capacity(lz4p->buffer) - LZ4RUBY_RAWSTREAM_PREFIX_SIZE;
   memset(lz4p->inoff, 0, LZ4RUBY_RAWSTREAM_BUFFER_MINSIZE);
   int status = lz4p->traits->reset(lz4p->lz4, lz4p->inoff);
   if (status != 0) { rb_raise(lz4_error, "failed reset raw stream encoder"); }
+  if (!NIL_P(predict)) {
+    lz4internal_rse_set_predict(lz4p, predict);
+  }
 }
 
 /*
@@ -488,14 +490,14 @@ static VALUE lz4internal_rse_reset(int argc, VALUE argv[], VALUE lz4) {
   struct lz4internal_rse_t *lz4p = lz4internal_rse_getcontext(lz4);
 
   if (blocksize == 0) {
-    lz4internal_rse_reset_state(lz4p);
+    lz4internal_rse_reset_state(lz4p, Qnil);
   } else if (NIL_P(is_high_compress)) {
     VALUE buf = lz4p->buffer;
     if (rb_str_capacity(buf) != blocksize) {
       rb_str_set_len(buf, 0);
       rb_str_resize(buf, blocksize);
     }
-    lz4internal_rse_reset_state(lz4p);
+    lz4internal_rse_reset_state(lz4p, predict);
   } else {
     VALUE buf = lz4p->buffer;
     if (rb_str_capacity(buf) != blocksize) {
@@ -504,10 +506,11 @@ static VALUE lz4internal_rse_reset(int argc, VALUE argv[], VALUE lz4) {
     }
     is_high_compress = RTEST(is_high_compress);
     if (lz4p->ishc == is_high_compress) {
-      lz4internal_rse_reset_state(lz4p);
+      lz4internal_rse_reset_state(lz4p, predict);
     } else {
-      lz4p->traits->free(lz4p->lz4);
+      void *lz4s = lz4p->lz4;
       lz4p->lz4 = NULL;
+      lz4p->traits->free(lz4s);
       lz4p->ishc = is_high_compress;
       lz4internal_rse_create_encoder(lz4p, buf, predict);
     }
